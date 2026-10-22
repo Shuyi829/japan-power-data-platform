@@ -2,11 +2,13 @@
 # source itself (download a fresh file) and logged in docs/SOURCES.md.
 #
 # Fields:
-#   url_template      URL with {yyyymmdd} / {yyyymm} / {yyyy} placeholders
+#   url_template      URL with {yyyymmdd} / {yyyymm} / {yyyy} / {fy} placeholders
+#                     ({fy} = Japanese fiscal year, starting 1 April)
 #   frequency         daily | monthly | yearly (how files are published)
 #   encoding          e.g. cp932 for Shift-JIS files
 #   skip_rows         rows above the header row
 #   expected_headers  exact header list; any mismatch fails the run
 #   time_convention   period_start | period_end
+#   timeout_s         HTTP timeout in seconds (default 60)
 
 sources: {}

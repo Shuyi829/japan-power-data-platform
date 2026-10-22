@@ -28,6 +28,7 @@ class SourceConfig:
     skip_rows: int = 0
     expected_headers: list[str] = field(default_factory=list)
     time_convention: TimeConvention = "period_start"
+    timeout_s: int = 60
 
 
 def load_sources(path: Path = DEFAULT_CONFIG) -> dict[str, SourceConfig]:

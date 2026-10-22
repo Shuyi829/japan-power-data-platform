@@ -16,6 +16,18 @@ uv run pytest
 cd dbt/jpower && uv run dbt build --profiles-dir .
 ```
 
+## Bronze ingestion
+
+```bash
+uv run python -m jpower.ingest.bronze --source <name> --date 2026-10-01
+uv run python -m jpower.ingest.bronze --source <name> --start 2026-04-01 --end 2026-10-01
+```
+
+Files land unchanged in `data/bronze/<source>/<period>/<downloaded_at>_<filename>`.
+Every attempt adds a row to `bronze.manifest` in DuckDB (`new` / `unchanged` / `error`,
+HTTP status, SHA-256, size, download time). Identical re-downloads are not stored twice;
+revised files are kept side by side.
+
 ## Layout
 
 ```
