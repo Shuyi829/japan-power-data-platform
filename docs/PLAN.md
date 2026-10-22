@@ -71,6 +71,8 @@ Each mart gets a short README explaining what it shows about the market.
 ## First month checklist
 
 - [ ] Week 1: review weather project; scaffold repo; JEPX ingestion into bronze
+  - [x] Scaffold: uv + pyproject, ruff, pytest, config loader, dbt + DuckDB (area seed), CI
+  - [ ] JEPX: find public CSV download, save fixture, config entry, bronze ingestion
 - [ ] Week 2: Tokyo, Kansai, Kyushu TSO feeds; unified silver schema
 - [ ] Week 3: dbt models, tests, freshness checks; daily runs in Dagster
 - [ ] Week 4: `mart_net_demand_floor` + simple chart + first README write-up

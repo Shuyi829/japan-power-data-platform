@@ -1,0 +1,18 @@
+version: 2
+
+seeds:
+  - name: areas
+    description: >
+      The one mapping from Japanese area names (kanji) to English area codes.
+      Okinawa is isolated and not part of JEPX.
+    columns:
+      - name: area_code
+        tests: [unique, not_null]
+      - name: area_name_ja
+        tests: [unique, not_null]
+      - name: frequency_hz
+        tests:
+          - accepted_values:
+              arguments:
+                values: [50, 60]
+                quote: false

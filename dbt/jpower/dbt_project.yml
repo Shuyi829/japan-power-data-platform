@@ -1,0 +1,33 @@
+name: "jpower"
+version: "0.1.0"
+config-version: 2
+
+profile: "jpower"
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Bronze = raw files + manifest, loaded by Python (not dbt).
+# Silver = cleaned long tables per domain; Gold = analysis marts.
+models:
+  jpower:
+    silver:
+      +materialized: view
+      +schema: silver
+    gold:
+      +materialized: table
+      +schema: gold
+
+seeds:
+  jpower:
+    +schema: ref
+    areas:
+      +column_types:
+        frequency_hz: integer

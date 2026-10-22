@@ -3,6 +3,10 @@
 All sources are public. Verify every URL, format, and convention against a fresh download
 before relying on it — sites change. Update this log whenever a new quirk is found.
 
+**Clean-room rule:** every entry here comes from the public source itself (its website,
+published docs, or a downloaded file). Nothing is taken from any employer's code, configs,
+or documents — not even URLs or column mappings.
+
 ## General quirks (apply to many sources)
 
 - **Encoding:** CSVs with Japanese headers are often Shift-JIS (cp932). Excel displays them

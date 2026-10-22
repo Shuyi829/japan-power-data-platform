@@ -1,0 +1,11 @@
+area_code,area_name_en,area_name_ja,frequency_hz,in_jepx
+HKD,Hokkaido,北海道,50,true
+THK,Tohoku,東北,50,true
+TKY,Tokyo,東京,50,true
+CHB,Chubu,中部,60,true
+HKR,Hokuriku,北陸,60,true
+KNS,Kansai,関西,60,true
+CGK,Chugoku,中国,60,true
+SKK,Shikoku,四国,60,true
+KYS,Kyushu,九州,60,true
+OKN,Okinawa,沖縄,60,false

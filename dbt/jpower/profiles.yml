@@ -1,0 +1,24 @@
+# dev  = local DuckDB (default, day-to-day)
+# snowflake = same models on Snowflake (needs `uv sync --extra snowflake` and .env values)
+#
+# dbt-duckdb resolves the relative path from this dbt project folder, so
+# ../../data/japan_power.duckdb is <project-root>/data/japan_power.duckdb.
+jpower:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH', '../../data/japan_power.duckdb') }}"
+      threads: 4
+      extensions:
+        - icu
+    snowflake:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', '') }}"
+      user: "{{ env_var('SNOWFLAKE_USER', '') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD', '') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', '') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', '') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', '') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA', 'jpower') }}"
+      threads: 4
