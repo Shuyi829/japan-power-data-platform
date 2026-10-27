@@ -8,12 +8,13 @@
 #   domain            raw/silver table the parsed rows go to (one table per domain)
 #   encoding          e.g. cp932 for Shift-JIS files
 #   skip_rows         rows above the header row
-#   expected_headers  exact header list after full-width -> half-width normalization;
-#                     any mismatch fails the run
+#   header_layouts    every known exact header list (after full-width -> half-width
+#                     normalization); a file matching none of them fails the run
 #   time_convention   period_start | period_end (how the TIME column labels a period)
 #   timeout_s         HTTP timeout in seconds (default 60)
 #   area_code         area from the dbt `areas` seed, for single-area files
-#   date_column / date_format / time_column   how to read the period timestamp
+#   date_column / date_formats / time_column  how to read the period timestamp
+#                     (date_formats: tried in order, each must match exactly)
 #   unit              unit of every value column (MW = average MW over the half hour)
 #   column_map        normalized header -> metric code; only mapped columns are kept
 
@@ -25,13 +26,19 @@ sources:
     domain: area_supply
     encoding: cp932
     skip_rows: 1 # row 0 is a unit/group line: 単位[MW平均], 供給力
-    time_convention: period_end # 0:30 ... 24:00
+    time_convention: period_end # 0:30 ... 24:00 (final files: 24:00:00)
     area_code: KYS
+    date_formats: ["%Y%m%d", "%Y/%m/%d"] # 2025-12 final file uses 2025/12/1
     unit: MW
-    expected_headers:
-      [DATE, TIME, エリア需要, 原子力, 火力(LNG), 火力(石炭), 火力(石油), 火力(その他), 水力,
-       地熱, バイオマス, 太陽光発電実績, 太陽光出力制御量, 風力発電実績, 風力出力制御量, 揚水,
-       蓄電池, 連系線, その他, 合計]
+    header_layouts:
+      # 20 columns: preliminary files (current months) and final files up to FY2025
+      - [DATE, TIME, エリア需要, 原子力, 火力(LNG), 火力(石炭), 火力(石油), 火力(その他), 水力,
+         地熱, バイオマス, 太陽光発電実績, 太陽光出力制御量, 風力発電実績, 風力出力制御量, 揚水,
+         蓄電池, 連系線, その他, 合計]
+      # 22 columns: final files from April 2026 add thermal and biomass curtailment
+      - [DATE, TIME, エリア需要, 原子力, 火力(LNG), 火力(石炭), 火力(石油), 火力(その他),
+         火力出力制御量, 水力, 地熱, バイオマス, バイオマス出力制御量, 太陽光発電実績,
+         太陽光出力制御量, 風力発電実績, 風力出力制御量, 揚水, 蓄電池, 連系線, その他, 合計]
     column_map:
       エリア需要: demand
       原子力: nuclear
@@ -39,9 +46,11 @@ sources:
       火力(石炭): thermal_coal
       火力(石油): thermal_oil
       火力(その他): thermal_other
+      火力出力制御量: thermal_curtailment # 22-column layout only
       水力: hydro
       地熱: geothermal
       バイオマス: biomass
+      バイオマス出力制御量: biomass_curtailment # 22-column layout only
       太陽光発電実績: solar
       太陽光出力制御量: solar_curtailment
       風力発電実績: wind

@@ -79,6 +79,7 @@ Each mart gets a short README explaining what it shows about the market.
   - [x] Generic bronze downloader + manifest (retries, checksums, revisions kept)
   - [x] Kyushu TSO monthly CSV: fixture, config entry, generic parser with header validation
   - [x] Kyushu: real bronze download, loader into `raw.area_supply`, dbt silver (latest revision + tests), gold `kyushu_demand_30min` + CSV export
+  - [x] Kyushu backfill: 2023-10 … today (earliest available at the public URL), 3 layouts handled
   - [ ] JEPX: find public CSV download, save fixture, config entry, bronze ingestion
 - [ ] Week 2: Tokyo and Kansai TSO feeds; unified silver schema
 - [ ] Week 3: dbt models, tests, freshness checks; daily runs in Dagster

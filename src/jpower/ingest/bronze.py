@@ -27,6 +27,7 @@ import argparse
 import datetime as dt
 import hashlib
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -277,6 +278,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start", type=dt.date.fromisoformat)
     parser.add_argument("--end", type=dt.date.fromisoformat)
     parser.add_argument("--file", type=Path, help="store a hand-downloaded file for --date")
+    parser.add_argument("--sleep", type=float, default=1.0, help="seconds between requests")
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     args = parser.parse_args(argv)
 
@@ -300,7 +302,9 @@ def main(argv: list[str] | None = None) -> int:
     failures = 0
     session = make_session()
     with duckdb.connect(str(args.db)) as con:
-        for day in days:
+        for i, day in enumerate(days):
+            if i:
+                time.sleep(args.sleep)  # be polite to public servers during backfills
             try:
                 row = download(source, day, con=con, session=session)
                 print(f"{row.period_key}: {row.status} ({row.bytes} bytes)")

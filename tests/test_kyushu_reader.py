@@ -72,7 +72,7 @@ def test_supply_balance_identity(parsed):
 
 def test_renamed_column_fails_loudly():
     header = [HEADER[0], HEADER[1].replace("地熱", "地熱発電")]
-    with pytest.raises(SchemaMismatchError, match="missing=\\['地熱'\\]"):
+    with pytest.raises(SchemaMismatchError, match=r"missing \[地熱\], unexpected \[地熱発電\]"):
         parse_csv(SOURCE, synthetic(row("20261001", "0:30"), header=header))
 
 
@@ -108,3 +108,43 @@ def test_period_start_convention_is_not_shifted():
 def test_bad_time_label_fails():
     with pytest.raises(ValueError, match="unparseable time"):
         parse_csv(SOURCE, synthetic(row("20261001", "0時30分")))
+
+
+def test_final_format_with_22_columns_and_seconds_in_time():
+    """Final (確報) files from April 2026: unquoted, 22 columns, end of day as 24:00:00."""
+    layout = SOURCE.header_layouts[1]
+    assert len(layout) == 22
+    content = "\r\n".join(
+        [
+            "単位[MW平均],,,供給力(確報)" + "," * 18,
+            ",".join(layout),
+            ",".join(["20260401", "23:30", "8662", *["1"] * 18, "8662"]),
+            ",".join(["20260401", "24:00:00", "8270", *["1"] * 18, "8270"]),
+        ]
+    ).encode("cp932")
+    out = parse_csv(SOURCE, content)
+    demand = out[out["metric"] == "demand"].set_index("period_start_jst")["value"]
+    assert demand[pd.Timestamp("2026-04-01 23:00")] == 8662
+    assert demand[pd.Timestamp("2026-04-01 23:30")] == 8270  # 24:00:00 -> same day 23:30
+    assert {"thermal_curtailment", "biomass_curtailment"} <= set(out["metric"])
+
+
+def test_20_column_layout_has_no_new_curtailment_metrics(parsed):
+    assert not {"thermal_curtailment", "biomass_curtailment"} & set(parsed["metric"])
+
+
+def test_time_with_nonzero_seconds_fails():
+    with pytest.raises(ValueError, match="unparseable time"):
+        parse_csv(SOURCE, synthetic(row("20261001", "0:30:15")))
+
+
+def test_slash_dates_without_zero_padding():
+    """The December 2025 final file writes dates as 2025/12/1."""
+    out = parse_csv(SOURCE, synthetic(row("2025/12/1", "0:30"), row("2025/12/31", "24:00:00")))
+    starts = sorted(set(out["period_start_jst"]))
+    assert starts == [pd.Timestamp("2025-12-01 00:00"), pd.Timestamp("2025-12-31 23:30")]
+
+
+def test_unknown_date_format_fails():
+    with pytest.raises(ValueError, match="dates match none"):
+        parse_csv(SOURCE, synthetic(row("01-10-2026", "0:30")))

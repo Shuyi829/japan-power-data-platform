@@ -75,6 +75,28 @@ Fixture: `tests/fixtures/kyushu/eria_jukyu_202610_09.csv` (October 2026, downloa
 - URL template **confirmed 2026-10-27**: plain HTTP GET returns the file (HTTP 200), no session or form needed.
 - Re-download 22 minutes later already contained one more half hour (file grows through the day).
 
+**History and formats (backfill 2026-10-27, months 2016-04 … 2026-09 requested):**
+
+- **Available: 2023-10 onwards (36 months back from Oct 2026), no gaps.** Every month from
+  2016-04 to 2023-09 returns HTTP 404 at this URL. Looks like a rolling ~3-year window;
+  older history may live elsewhere or in another format (not yet investigated).
+  → Keep every file in bronze: once a month drops out of the window it cannot be re-pulled.
+  → Re-check next month whether 2023-10 has disappeared (confirms the rolling window).
+- **Three layouts over time** (all cp932, all have the unit line in row 0):
+
+  | Months | Unit line | Columns | Quoted | End of day |
+  |---|---|---|---|---|
+  | 2023-10…2024-02, current months (2026-09, 2026-10) | `供給力` | 20 | yes | `24:00` |
+  | 2024-03…2026-03 | `供給力(確報)` (**final**) | 20 | no | `24:00:00` |
+  | 2026-04…2026-08 | `供給力(確報)` | 22: adds 火力出力制御量, バイオマス出力制御量 | no | `24:00:00` |
+
+  The unmarked layout appears to be **preliminary** (速報); recent months are later replaced at
+  the same URL by final (確報) files. Why 2023-10…2024-02 were never re-published as final is unknown.
+- **New curtailment columns from April 2026 (FY2026):** thermal and biomass curtailment, mapped to
+  `thermal_curtailment` / `biomass_curtailment`. They are not part of the balance identity either.
+- **Date format varies per file:** the 2025-12 final file writes `2025/12/1` instead of `20251201`.
+- **Wind can be slightly negative** (−2 MW, 16 half hours, only in preliminary files) — station power.
+
 ## 3. OCCTO interconnectors and reserve margins
 
 - Site: https://web-kohyo.occto.or.jp/kks-web-public/ (browser automation needed).
@@ -112,3 +134,8 @@ Fixture: `tests/fixtures/kyushu/eria_jukyu_202610_09.csv` (October 2026, downloa
 - 2026-10-27 — Kyushu — full-width （ＬＮＧ） in headers — headers NFKC-normalized before validation
 - 2026-10-27 — Kyushu — period-ending TIME with 24:00 — shifted −30 min to period_start in the reader
 - 2026-10-27 — Kyushu — 連系線 sign undocumented in file — inferred from exact balance identity: positive = export
+- 2026-10-27 — Kyushu — files before 2023-10 return 404 — bronze keeps every file; investigate older archive later
+- 2026-10-27 — Kyushu — 22-column layout from 2026-04 — second entry in `header_layouts`; unknown layouts still fail
+- 2026-10-27 — Kyushu — `24:00:00` in final files — time parser accepts H:MM and H:MM:00
+- 2026-10-27 — Kyushu — `2025/12/1` dates in 2025-12 — `date_formats` list in config, each matched exactly
+- 2026-10-27 — Kyushu — wind −2 MW — plausibility test allows −50 MW for solar and wind

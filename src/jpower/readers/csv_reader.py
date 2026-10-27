@@ -4,8 +4,8 @@ Every source-specific detail (encoding, rows to skip, expected headers, column m
 time convention, unit) comes from SourceConfig. Steps:
 
 1. decode with the configured encoding (e.g. cp932)
-2. normalize headers full-width -> half-width (NFKC) and validate against
-   ``expected_headers`` -> SchemaMismatchError on any difference (no silent column shifts)
+2. normalize headers full-width -> half-width (NFKC) and validate against the known
+   ``header_layouts`` -> SchemaMismatchError on any other layout (no silent column shifts)
 3. build ``period_start`` in JST (and UTC): period-ending labels such as "24:00" are
    shifted back 30 minutes, so 24:00 on 1 Oct becomes 23:30 on 1 Oct
 4. melt mapped columns into one row per (period, metric); values that are blank or
@@ -16,11 +16,11 @@ from __future__ import annotations
 
 import datetime as dt
 import io
-import unicodedata
 
 import pandas as pd
 
 from jpower.config import SourceConfig
+from jpower.text import normalize
 
 PERIOD = dt.timedelta(minutes=30)
 JST_OFFSET = dt.timedelta(hours=9)  # Japan has no daylight saving time
@@ -41,26 +41,40 @@ class SchemaMismatchError(ValueError):
     """Headers in the file differ from the configured expected headers."""
 
 
-def normalize(text: str) -> str:
-    """Full-width -> half-width (Ａ→A, （→(, full-width space→space) and trim."""
-    return unicodedata.normalize("NFKC", text).strip()
-
-
 def validate_headers(source: SourceConfig, headers: list[str]) -> None:
-    expected = [normalize(h) for h in source.expected_headers]
-    if headers == expected:
+    """Headers must match one of the source's known layouts exactly (after normalization).
+
+    A source can publish more than one layout over time (e.g. columns added in a new
+    fiscal year). Each layout is listed explicitly in config; anything else fails.
+    """
+    layouts = [[normalize(h) for h in layout] for layout in source.header_layouts]
+    if headers in layouts:
         return
-    missing = [h for h in expected if h not in headers]
-    unexpected = [h for h in headers if h not in expected]
-    detail = f"missing={missing} unexpected={unexpected}"
-    if not missing and not unexpected:
-        detail = "same columns, different order"
-    raise SchemaMismatchError(f"{source.name}: header mismatch ({detail}); got {headers}")
+
+    def diff(layout: list[str]) -> tuple[list[str], list[str]]:
+        return [h for h in layout if h not in headers], [h for h in headers if h not in layout]
+
+    closest = min(layouts, key=lambda lay: sum(map(len, diff(lay))), default=[])
+    missing, unexpected = diff(closest)
+    if missing or unexpected:
+        detail = f"vs closest known layout: missing [{', '.join(missing)}], "
+        detail += f"unexpected [{', '.join(unexpected)}]"
+    else:
+        detail = "same columns as a known layout, different order"
+    raise SchemaMismatchError(
+        f"{source.name}: header mismatch ({detail}); got [{', '.join(headers)}]"
+    )
 
 
 def _period_start(source: SourceConfig, dates: pd.Series, times: pd.Series) -> pd.Series:
-    day = pd.to_datetime(dates, format=source.date_format)
-    hm = times.str.extract(r"^\s*(\d{1,2}):(\d{2})\s*$")
+    day = pd.Series(pd.NaT, index=dates.index, dtype="datetime64[ns]")
+    for fmt in source.date_formats:  # e.g. 20251201 in most files, 2025/12/1 in some
+        todo = day.isna()
+        day[todo] = pd.to_datetime(dates[todo], format=fmt, errors="coerce")
+    if day.isna().any():
+        bad = dates[day.isna()].unique()[:5].tolist()
+        raise ValueError(f"{source.name}: dates match none of {source.date_formats}: {bad}")
+    hm = times.str.extract(r"^\s*(\d{1,2}):(\d{2})(?::00)?\s*$")  # 0:30, 24:00, 24:00:00
     if hm.isna().any().any():
         bad = times[hm.isna().any(axis=1)].unique()[:5].tolist()
         raise ValueError(f"{source.name}: unparseable time labels {bad}")
@@ -76,7 +90,8 @@ def parse_csv(source: SourceConfig, content: bytes) -> pd.DataFrame:
     validate_headers(source, list(df.columns))
 
     start_jst = _period_start(source, df[source.date_column], df[source.time_column])
-    wide = df[list(source.column_map)].rename(columns=source.column_map)
+    present = [c for c in source.column_map if c in df.columns]  # layouts differ per period
+    wide = df[present].rename(columns=source.column_map)
     wide.insert(0, "period_start_jst", start_jst)
     long = wide.melt(id_vars="period_start_jst", var_name="metric", value_name="raw")
 
