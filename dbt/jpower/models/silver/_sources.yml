@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Parsed rows of every stored bronze file version, loaded by `python -m jpower.load`.
+    schema: raw
+    tables:
+      - name: area_supply
+        description: Area demand and generation mix, all file versions, long format.
+        loaded_at_field: downloaded_at_utc
+        freshness: # Kyushu updates its current-month file through the day
+          warn_after: { count: 6, period: hour }
+          error_after: { count: 24, period: hour }

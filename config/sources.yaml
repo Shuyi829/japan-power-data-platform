@@ -5,10 +5,49 @@
 #   url_template      URL with {yyyymmdd} / {yyyymm} / {yyyy} / {fy} placeholders
 #                     ({fy} = Japanese fiscal year, starting 1 April)
 #   frequency         daily | monthly | yearly (how files are published)
+#   domain            raw/silver table the parsed rows go to (one table per domain)
 #   encoding          e.g. cp932 for Shift-JIS files
 #   skip_rows         rows above the header row
-#   expected_headers  exact header list; any mismatch fails the run
-#   time_convention   period_start | period_end
+#   expected_headers  exact header list after full-width -> half-width normalization;
+#                     any mismatch fails the run
+#   time_convention   period_start | period_end (how the TIME column labels a period)
 #   timeout_s         HTTP timeout in seconds (default 60)
+#   area_code         area from the dbt `areas` seed, for single-area files
+#   date_column / date_format / time_column   how to read the period timestamp
+#   unit              unit of every value column (MW = average MW over the half hour)
+#   column_map        normalized header -> metric code; only mapped columns are kept
 
-sources: {}
+sources:
+  kyushu_area_supply:
+    # Kyushu TSO area supply-demand actuals, one file per month, updated through the day.
+    url_template: https://www.kyuden.co.jp/td_area_jukyu/csv/eria_jukyu_{yyyymm}_09.csv
+    frequency: monthly
+    domain: area_supply
+    encoding: cp932
+    skip_rows: 1 # row 0 is a unit/group line: 単位[MW平均], 供給力
+    time_convention: period_end # 0:30 ... 24:00
+    area_code: KYS
+    unit: MW
+    expected_headers:
+      [DATE, TIME, エリア需要, 原子力, 火力(LNG), 火力(石炭), 火力(石油), 火力(その他), 水力,
+       地熱, バイオマス, 太陽光発電実績, 太陽光出力制御量, 風力発電実績, 風力出力制御量, 揚水,
+       蓄電池, 連系線, その他, 合計]
+    column_map:
+      エリア需要: demand
+      原子力: nuclear
+      火力(LNG): thermal_lng
+      火力(石炭): thermal_coal
+      火力(石油): thermal_oil
+      火力(その他): thermal_other
+      水力: hydro
+      地熱: geothermal
+      バイオマス: biomass
+      太陽光発電実績: solar
+      太陽光出力制御量: solar_curtailment
+      風力発電実績: wind
+      風力出力制御量: wind_curtailment
+      揚水: pumped_storage # negative = pumping
+      蓄電池: battery # negative = charging
+      連系線: interconnector_net_export # positive = export out of the area
+      その他: other
+      合計: total_supply

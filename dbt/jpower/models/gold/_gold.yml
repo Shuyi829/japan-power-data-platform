@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: kyushu_demand_30min
+    description: >
+      Kyushu area demand (エリア需要), average MW per half hour, latest revision.
+      Exported to data/exports/kyushu_demand_30min.csv by `python -m jpower.export`.
+    columns:
+      - name: period_start_jst
+        description: Start of the half hour, JST (canonical).
+        tests: [unique, not_null]
+      - name: period_end_jst
+        description: End of the half hour, JST (the source file's own label convention).
+      - name: date
+        description: JST date of period_start.
+      - name: time
+        description: "HH:MM of period_start, 00:00 ... 23:30."
+      - name: demand_mw
+        description: Average MW over the half hour. NULL when the source value is missing.
+      - name: quality_flag
+        tests:
+          - accepted_values:
+              arguments:
+                values: [ok, missing, invalid]

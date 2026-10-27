@@ -52,6 +52,29 @@ or documents — not even URLs or column mappings.
   which shift later columns; Shikoku lacks some columns; Kyushu appears to be period-ending.
 - **Columns can change without notice** → validate headers on every run.
 
+### Kyushu (`kyushu_area_supply`) — verified from a downloaded file, 2026-10-27
+
+Fixture: `tests/fixtures/kyushu/eria_jukyu_202610_09.csv` (October 2026, downloaded 27 Oct).
+
+- **Encoding / layout:** cp932, CRLF, every field quoted. Row 0 is a unit/group line
+  (`単位[MW平均]`, …, `供給力`); row 1 is the header. → `skip_rows: 1`.
+- **Unit:** average MW per half hour (not 万kW).
+- **Columns (20):** DATE, TIME, エリア需要 (area demand), 原子力, 火力（ＬＮＧ／石炭／石油／その他）, 水力,
+  地熱, バイオマス, 太陽光発電実績, 太陽光出力制御量, 風力発電実績, 風力出力制御量, 揚水, 蓄電池, 連系線,
+  その他, 合計. Thermal headers use **full-width** brackets and letters → NFKC-normalize before matching.
+- **Time:** DATE `yyyymmdd`, TIME `0:30` … `24:00` → **period-ending** (confirmed).
+  `24:00` belongs to the same DATE; period_start = label − 30 min.
+- **Current month is partial and updated intraday:** the file downloaded at ~15:00 JST ended at
+  the 10:30 label → re-pull the current month every run; bronze keeps each revision.
+- **Signs:** 揚水 (pumped storage) and 蓄電池 (battery) are negative when pumping/charging;
+  連系線 positive = **net export** out of Kyushu; solar can be slightly negative at night (−8 MW seen).
+- **Balance identity (holds exactly on all 1,269 rows):**
+  合計 = Σ(generation, 揚水, 蓄電池, その他) − 連系線, with the two 出力制御量 (curtailment) columns
+  excluded. Curtailment is reported alongside, not part of supply. Good automatic quality check.
+- 合計 vs エリア需要 differ by −32…+18 MW (losses/rounding); not an error.
+- URL template **confirmed 2026-10-27**: plain HTTP GET returns the file (HTTP 200), no session or form needed.
+- Re-download 22 minutes later already contained one more half hour (file grows through the day).
+
 ## 3. OCCTO interconnectors and reserve margins
 
 - Site: https://web-kohyo.occto.or.jp/kks-web-public/ (browser automation needed).
@@ -85,3 +108,7 @@ or documents — not even URLs or column mappings.
 ## Quirks found during development
 
 <!-- Add entries as: YYYY-MM-DD — source — quirk — how it was handled -->
+
+- 2026-10-27 — Kyushu — full-width （ＬＮＧ） in headers — headers NFKC-normalized before validation
+- 2026-10-27 — Kyushu — period-ending TIME with 24:00 — shifted −30 min to period_start in the reader
+- 2026-10-27 — Kyushu — 連系線 sign undocumented in file — inferred from exact balance identity: positive = export

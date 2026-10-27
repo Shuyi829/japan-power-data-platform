@@ -1,0 +1,32 @@
+version: 2
+
+models:
+  - name: area_supply
+    description: >
+      Area demand and generation mix per half hour, latest revision only.
+      Canonical time is period_start (JST, with UTC alongside). Values are average MW.
+      Missing source values are NULL with quality_flag 'missing' or 'invalid'.
+    columns:
+      - name: source
+        tests: [not_null]
+      - name: area_code
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('areas')
+                field: area_code
+      - name: period_start_jst
+        tests: [not_null]
+      - name: period_start_utc
+        tests: [not_null]
+      - name: metric
+        description: demand, nuclear, thermal_*, hydro, solar, wind, *_curtailment, pumped_storage, battery, interconnector_net_export, other, total_supply
+        tests: [not_null]
+      - name: quality_flag
+        tests:
+          - accepted_values:
+              arguments:
+                values: [ok, missing, invalid]
+      - name: downloaded_at_utc
+        description: When the file version this value came from was downloaded (as-of time).

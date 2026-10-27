@@ -6,6 +6,7 @@ Layout (one folder per source and period, one file per distinct download):
 
 Every attempt writes a row to the DuckDB table ``bronze.manifest``:
 
+    method = 'http' (downloaded here) | 'manual' (downloaded by hand, then --file)
     status = 'new'        content differs from the last stored copy -> file written
              'unchanged'  same checksum as the last stored copy      -> no file written
              'error'      HTTP error or network failure              -> exception re-raised
@@ -17,6 +18,7 @@ Usage:
 
     uv run python -m jpower.ingest.bronze --source <name> --date 2026-10-01
     uv run python -m jpower.ingest.bronze --source <name> --start 2026-04-01 --end 2026-10-01
+    uv run python -m jpower.ingest.bronze --source <name> --date 2026-10-01 --file <path>
 """
 
 from __future__ import annotations
@@ -55,6 +57,8 @@ create table if not exists bronze.manifest (
     downloaded_at_utc timestamp not null,
     error             varchar
 );
+alter table bronze.manifest add column if not exists method varchar;  -- http | manual
+update bronze.manifest set method = 'http' where method is null;  -- rows from before the column
 """
 
 
@@ -74,6 +78,7 @@ class ManifestRow:
     bytes: int | None
     downloaded_at_utc: dt.datetime
     error: str | None = None
+    method: str = "http"
 
 
 def fiscal_year(day: dt.date) -> int:
@@ -142,7 +147,11 @@ def _latest_sha256(con: duckdb.DuckDBPyConnection, source: str, key: str) -> str
 
 def _insert(con: duckdb.DuckDBPyConnection, row: ManifestRow) -> None:
     con.execute(
-        "insert into bronze.manifest values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        """
+        insert into bronze.manifest (source, period_key, url, status, http_status, file_path,
+                                     sha256, bytes, downloaded_at_utc, error, method)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
         [
             row.source,
             row.period_key,
@@ -154,8 +163,45 @@ def _insert(con: duckdb.DuckDBPyConnection, row: ManifestRow) -> None:
             row.bytes,
             row.downloaded_at_utc,
             row.error,
+            row.method,
         ],
     )
+
+
+def _store(
+    source: SourceConfig,
+    key: str,
+    url: str,
+    content: bytes,
+    filename: str,
+    *,
+    con: duckdb.DuckDBPyConnection,
+    bronze_root: Path,
+    downloaded_at: dt.datetime,
+    http_status: int | None,
+    method: str,
+) -> ManifestRow:
+    """Write content to bronze unless identical to the last stored copy; record the attempt."""
+    sha = hashlib.sha256(content).hexdigest()
+    if sha == _latest_sha256(con, source.name, key):
+        row = ManifestRow(
+            source.name, key, url, "unchanged", http_status, None, sha, len(content),
+            downloaded_at, method=method,
+        )  # fmt: skip
+        _insert(con, row)
+        return row
+
+    rel_path = Path(source.name) / key / f"{downloaded_at:%Y%m%dT%H%M%SZ}_{filename}"
+    target = bronze_root / rel_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(content)  # raw bytes, original encoding, never modified
+
+    row = ManifestRow(
+        source.name, key, url, "new", http_status, rel_path.as_posix(), sha, len(content),
+        downloaded_at, method=method,
+    )  # fmt: skip
+    _insert(con, row)
+    return row
 
 
 def download(
@@ -193,26 +239,35 @@ def download(
         error_row(resp.status_code, f"HTTP {resp.status_code}")
         raise RuntimeError(f"{source.name} {key}: HTTP {resp.status_code} for {url}")
 
-    content = resp.content
-    sha = hashlib.sha256(content).hexdigest()
-    if sha == _latest_sha256(con, source.name, key):
-        row = ManifestRow(
-            source.name, key, url, "unchanged", 200, None, sha, len(content), downloaded_at
-        )
-        _insert(con, row)
-        return row
-
     filename = Path(urlparse(url).path).name or "download"
-    rel_path = Path(source.name) / key / f"{downloaded_at:%Y%m%dT%H%M%SZ}_{filename}"
-    target = bronze_root / rel_path
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(content)  # raw bytes, original encoding, never modified
+    return _store(
+        source, key, url, resp.content, filename, con=con, bronze_root=bronze_root,
+        downloaded_at=downloaded_at, http_status=200, method="http",
+    )  # fmt: skip
 
-    row = ManifestRow(
-        source.name, key, url, "new", 200, rel_path.as_posix(), sha, len(content), downloaded_at
-    )
-    _insert(con, row)
-    return row
+
+def ingest_file(
+    source: SourceConfig,
+    day: dt.date,
+    path: Path,
+    *,
+    con: duckdb.DuckDBPyConnection,
+    bronze_root: Path = DEFAULT_BRONZE_ROOT,
+    downloaded_at: dt.datetime | None = None,
+) -> ManifestRow:
+    """Store a file that was downloaded by hand (e.g. in a browser) exactly like a download.
+
+    ``downloaded_at`` defaults to the file's modification time, the best guess of when it
+    was fetched. The manifest marks the row with method='manual'.
+    """
+    con.execute(MANIFEST_DDL)
+    if downloaded_at is None:
+        downloaded_at = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.UTC)
+    return _store(
+        source, period_key(source, day), render_url(source, day), path.read_bytes(), path.name,
+        con=con, bronze_root=bronze_root, downloaded_at=downloaded_at.replace(tzinfo=None),
+        http_status=None, method="manual",
+    )  # fmt: skip
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -221,10 +276,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--date", type=dt.date.fromisoformat, help="single period")
     parser.add_argument("--start", type=dt.date.fromisoformat)
     parser.add_argument("--end", type=dt.date.fromisoformat)
+    parser.add_argument("--file", type=Path, help="store a hand-downloaded file for --date")
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     args = parser.parse_args(argv)
 
     source = load_sources()[args.source]
+    if args.file:
+        if not args.date:
+            parser.error("--file needs --date (any day inside the file's period)")
+        args.db.parent.mkdir(parents=True, exist_ok=True)
+        with duckdb.connect(str(args.db)) as con:
+            row = ingest_file(source, args.date, args.file, con=con)
+        print(f"{row.period_key}: {row.status} ({row.bytes} bytes, manual)")
+        return 0
     if args.date:
         days = [args.date]
     elif args.start and args.end:

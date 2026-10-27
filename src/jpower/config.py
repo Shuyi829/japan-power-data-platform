@@ -1,7 +1,7 @@
 """Load per-source reader config from config/sources.yaml.
 
 One generic reader handles every CSV source; what differs per source (URL template,
-encoding, rows to skip, expected headers, time convention) lives in config.
+encoding, rows to skip, expected headers, column map, units, time convention) lives in config.
 Adding a source means adding a config entry, not a new class.
 """
 
@@ -24,11 +24,18 @@ class SourceConfig:
     name: str
     url_template: str
     frequency: Literal["daily", "monthly", "yearly"]
+    domain: str = "area_supply"
     encoding: str = "utf-8"
     skip_rows: int = 0
     expected_headers: list[str] = field(default_factory=list)
     time_convention: TimeConvention = "period_start"
     timeout_s: int = 60
+    area_code: str | None = None
+    date_column: str = "DATE"
+    date_format: str = "%Y%m%d"
+    time_column: str = "TIME"
+    unit: str = "MW"
+    column_map: dict[str, str] = field(default_factory=dict)
 
 
 def load_sources(path: Path = DEFAULT_CONFIG) -> dict[str, SourceConfig]:

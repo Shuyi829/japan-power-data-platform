@@ -9,6 +9,10 @@ does much of the boilerplate; add 30–50% if writing everything by hand.
 
 Goal: one thin, complete pipeline before going wide.
 
+Build order (decided 2026-10-27): **Kyushu demand + generation mix first** (step 4, Kyushu only),
+then JEPX prices (step 3), then Tokyo and Kansai. Kyushu first leads straight to the
+Stage A milestone, and its monthly CSV fits the bronze downloader as-is.
+
 | # | Step | Hours | Notes |
 |---|------|-------|-------|
 | 1 | Repo setup | 6–8 | Review `05 weather-api-data-engineering`; dbt + DuckDB; ruff, pytest, simple CI |
@@ -73,7 +77,9 @@ Each mart gets a short README explaining what it shows about the market.
 - [ ] Week 1: review weather project; scaffold repo; JEPX ingestion into bronze
   - [x] Scaffold: uv + pyproject, ruff, pytest, config loader, dbt + DuckDB (area seed), CI
   - [x] Generic bronze downloader + manifest (retries, checksums, revisions kept)
+  - [x] Kyushu TSO monthly CSV: fixture, config entry, generic parser with header validation
+  - [x] Kyushu: real bronze download, loader into `raw.area_supply`, dbt silver (latest revision + tests), gold `kyushu_demand_30min` + CSV export
   - [ ] JEPX: find public CSV download, save fixture, config entry, bronze ingestion
-- [ ] Week 2: Tokyo, Kansai, Kyushu TSO feeds; unified silver schema
+- [ ] Week 2: Tokyo and Kansai TSO feeds; unified silver schema
 - [ ] Week 3: dbt models, tests, freshness checks; daily runs in Dagster
 - [ ] Week 4: `mart_net_demand_floor` + simple chart + first README write-up

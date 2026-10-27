@@ -6,7 +6,7 @@ import pytest
 import requests
 
 from jpower.config import SourceConfig
-from jpower.ingest.bronze import download, fiscal_year, periods_between, render_url
+from jpower.ingest.bronze import download, fiscal_year, ingest_file, periods_between, render_url
 
 MONTHLY = SourceConfig(
     name="demo", url_template="https://example.com/data_{yyyymm}.csv", frequency="monthly"
@@ -122,3 +122,28 @@ def test_network_failure_is_recorded_and_raised(con, tmp_path: Path):
         )
 
     assert manifest(con) == [("error", None, None)]
+
+
+def test_manual_file_is_stored_like_a_download(con, tmp_path: Path):
+    local = tmp_path / "eria_jukyu_202610_09.csv"
+    local.write_bytes(b"raw bytes")
+    bronze_root = tmp_path / "bronze"
+
+    first = ingest_file(
+        MONTHLY, dt.date(2026, 10, 27), local, con=con, bronze_root=bronze_root, downloaded_at=T0
+    )
+    again = ingest_file(
+        MONTHLY,
+        dt.date(2026, 10, 1),
+        local,
+        con=con,
+        bronze_root=bronze_root,
+        downloaded_at=T0 + dt.timedelta(hours=1),
+    )
+
+    assert first.status == "new" and first.period_key == "202610"
+    assert first.file_path == "demo/202610/20261022T030000Z_eria_jukyu_202610_09.csv"
+    assert (bronze_root / first.file_path).read_bytes() == b"raw bytes"
+    assert again.status == "unchanged"
+    methods = con.execute("select distinct method, http_status from bronze.manifest").fetchall()
+    assert methods == [("manual", None)]
