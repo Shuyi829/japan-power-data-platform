@@ -72,6 +72,27 @@ Each mart gets a short README explaining what it shows about the market.
 
 - Text-to-SQL agent over gold marts, with an evaluation set of questions and expected answers.
 
+## Status (2026-11-11)
+
+**Working end to end for Kyushu:** bronze download (or `--file` for hand-downloaded files)
+→ `raw.area_supply` → `silver.area_supply` (latest revision, tested) →
+`gold.kyushu_demand_30min` → `data/exports/kyushu_demand_30min.csv`.
+History 2023-10 onwards (earliest month at the public URL). 36 pytest + 22 dbt checks, CI green.
+
+**Local data is not in git** (`data/` is gitignored). The bronze files are the only copy of
+months that drop out of Kyushu's ~3-year window, so copy the whole `data/` folder
+(bronze files + `japan_power.duckdb`, which holds the manifest) when moving machines.
+On a fresh machine without it: `uv sync`, then re-run the backfill (earliest months may be gone).
+
+**Next steps, in order:**
+1. Refresh Kyushu from 2026-10-01 to today (data currently stops at 2026-10-27 10:30 JST),
+   then load, `dbt build`, export.
+2. JEPX day-ahead prices: download one spot CSV into `tests/fixtures/jepx/`, profile it,
+   add config + reader support, log in SOURCES.md.
+3. Daily Dagster schedule (download → load → dbt build → export) + `dbt source freshness`,
+   so gaps like step 1 can't happen silently.
+4. `mart_net_demand_floor` for Kyushu (Stage A milestone).
+
 ## First month checklist
 
 - [ ] Week 1: review weather project; scaffold repo; JEPX ingestion into bronze
